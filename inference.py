@@ -28,7 +28,7 @@ flashinfer_cache_vol = modal.Volume.from_name(
     "flashinfer-cache", create_if_missing=True
 )
 
-vllm_passphrase = os.environ.get("VLLM_PASSPHRASE")
+vllm_passphrase = str(os.environ.get("VLLM_PASSPHRASE"))
 
 # App configuration
 app = modal.App(f"example-gpt-oss-inference{vllm_passphrase}")
