@@ -118,7 +118,6 @@
             position: sticky;
             left: 0;
             background: #16213e;
-            transform: translateZ(2px);
         }
         td.team-cell {
             text-align: left;
@@ -132,7 +131,6 @@
             position: sticky;
             left: var(--pos-width);
             background: #16213e;
-            transform: translateZ(1px);
         }
         th.score-header {
             width: var(--score-width);
@@ -150,7 +148,10 @@
             position: sticky;
             left: calc(var(--pos-width) + var(--team-width));
             background: #16213e;
-            transform: translateZ(1px);
+        }
+        tbody tr {
+            content-visibility: auto;
+            contain-intrinsic-size: auto 32px;
         }
         td.score-cell {
             background: #1a2744;
@@ -181,14 +182,6 @@
             min-width: var(--date-col-width);
             max-width: var(--date-col-width);
         }
-        tr:hover td {
-            background: #1a3a5c;
-        }
-        tr:hover td.pos-cell,
-        tr:hover td.team-cell {
-            background: #1a3a5c;
-        }
-
         /* Mobile styles */
         @media (max-width: 600px) {
             :root {
@@ -278,7 +271,7 @@
     </div>
 
     <script>
-        const API_URL = 'https://tonghuikang--leaderboard-monitor-get-history.modal.run';
+        const DATA_URL = 'leaderboard.jsonl';
 
         function formatMinutes(minutes) {
             if (minutes === undefined || minutes === null) return '';
@@ -289,54 +282,30 @@
             return `${hours}h ${mins}m`;
         }
 
-        function renderGrid(positions, history) {
-            if (!positions || positions.length === 0) {
-                return '<div class="no-data">No data available yet. The cron job runs every minute.</div>';
-            }
-
-            // Collect all unique dates across all teams
+        function computeSortedDates(history) {
             const allDates = new Set();
             for (const teamId of Object.keys(history)) {
                 for (const date of Object.keys(history[teamId])) {
-                    // Extract base date (mm-dd) from keys like "12-11" or "12-11-1"
-                    const baseDate = date.substring(0, 5);
-                    allDates.add(baseDate);
+                    allDates.add(date.substring(0, 5));
                 }
             }
-
-            // Sort dates (most recent first) and filter out dates before 12-12
-            // Competition runs from Oct 2025 to ~Mar 2026
-            // Months 10-12 are 2025, months 01-09 are 2026
-            const sortedDates = Array.from(allDates).sort((a, b) => {
+            return Array.from(allDates).sort((a, b) => {
                 const monthA = parseInt(a.substring(0, 2));
                 const monthB = parseInt(b.substring(0, 2));
-                // Months 1-9 are 2026, months 10-12 are 2025
                 const yearA = monthA <= 9 ? 2026 : 2025;
                 const yearB = monthB <= 9 ? 2026 : 2025;
-                if (yearA !== yearB) return yearB - yearA; // Most recent year first (2026 before 2025)
-                // Within same year, sort by date descending
+                if (yearA !== yearB) return yearB - yearA;
                 return b.localeCompare(a);
             }).filter(date => {
                 const month = parseInt(date.substring(0, 2));
-                // Include 2025 dates from 12-12 onwards, and all 2026 dates (months 01-09)
-                if (month === 12) {
-                    return date >= '12-12'; // 2025 December, only 12th onwards
-                }
-                if (month >= 10 && month <= 11) {
-                    return false; // Exclude Oct-Nov 2025 (before competition start)
-                }
-                return true; // All 2026 months (01-09)
+                if (month === 12) return date >= '12-12';
+                if (month >= 10 && month <= 11) return false;
+                return true;
             });
+        }
 
-            if (sortedDates.length === 0) {
-                return '<div class="no-data">No historical data recorded yet.</div>';
-            }
-
-            // Build table
-            let html = '<table>';
-
-            // Header row with dates
-            html += '<thead><tr>';
+        function buildSkeleton(sortedDates) {
+            let html = '<table><thead><tr>';
             html += '<th class="pos-header">#</th>';
             html += '<th class="team-header">Team</th>';
             html += '<th class="score-header">Score</th>';
@@ -344,11 +313,13 @@
             for (const date of sortedDates) {
                 html += `<th class="date-header">${date}</th>`;
             }
-            html += '</tr></thead>';
+            html += '</tr></thead><tbody id="rows"></tbody></table>';
+            return html;
+        }
 
-            // Body rows with teams (already sorted by position)
-            html += '<tbody>';
-            for (const pos of positions) {
+        function buildRowsHTML(positionsSlice, history, sortedDates) {
+            let html = '';
+            for (const pos of positionsSlice) {
                 const [teamId, teamName, position, subCount, score] = pos;
                 const teamHist = history[teamId] || {};
 
@@ -358,7 +329,6 @@
                 html += `<td class="total-score-cell"><span class="score-value">${score}</span></td>`;
                 html += `<td class="score-cell">${subCount}</td>`;
 
-                // First pass: collect entries for each date
                 const dateEntries = [];
                 for (const date of sortedDates) {
                     let entry = null;
@@ -372,14 +342,11 @@
                     dateEntries.push(entry);
                 }
 
-                // Second pass: determine if score improved compared to ALL previous entries
-                // Sort all team history entries by date key to find when scores actually improved
                 const allEntries = Object.entries(teamHist)
                     .map(([key, data]) => ({ key, score: data[0], minutes_taken: data[1] }))
                     .sort((a, b) => a.key.localeCompare(b.key));
 
-                // Track the running max score to detect genuine improvements
-                const scoreAtKey = {};  // date_key -> whether this was a new high score
+                const scoreAtKey = {};
                 let runningMaxScore = 0;
                 for (const entry of allEntries) {
                     const currentScore = parseInt(entry.score) || 0;
@@ -387,39 +354,26 @@
                         scoreAtKey[entry.key] = currentScore;
                         runningMaxScore = currentScore;
                     } else {
-                        scoreAtKey[entry.key] = null;  // Not a new high
+                        scoreAtKey[entry.key] = null;
                     }
                 }
 
-                // Third pass: render cells
                 for (let i = 0; i < sortedDates.length; i++) {
                     const entry = dateEntries[i];
                     if (!entry) {
-                        // No data for this date
                         html += '<td class="score-cell">-</td>';
                     } else {
                         const timeStr = formatMinutes(entry.data[1]);
                         const newHighScore = scoreAtKey[entry.key];
-
-                        if (newHighScore) {
-                            // This submission achieved a new high score
-                            html += '<td class="score-cell has-data">';
-                            html += `<span class="score-value">${newHighScore}</span>`;
-                            html += `<span class="time-value">${timeStr}</span>`;
-                            html += '</td>';
-                        } else {
-                            // Has data but score didn't improve, show "-" for score
-                            html += '<td class="score-cell has-data">';
-                            html += '<span class="score-value">-</span>';
-                            html += `<span class="time-value">${timeStr}</span>`;
-                            html += '</td>';
-                        }
+                        const scoreCell = newHighScore ? newHighScore : '-';
+                        html += '<td class="score-cell has-data">';
+                        html += `<span class="score-value">${scoreCell}</span>`;
+                        html += `<span class="time-value">${timeStr}</span>`;
+                        html += '</td>';
                     }
                 }
                 html += '</tr>';
             }
-            html += '</tbody></table>';
-
             return html;
         }
 
@@ -431,31 +385,65 @@
             statusEl.textContent = 'Loading data...';
 
             try {
-                const response = await fetch(API_URL);
-                const data = await response.json();
-
-                if (data.error) {
-                    statusEl.className = 'status error';
-                    statusEl.textContent = `Error: ${data.error}`;
-                    return;
+                const response = await fetch(DATA_URL);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
                 }
+                const text = await response.text();
 
-                const positions = data.positions || [];
-                const history = data.history || {};
+                const positions = [];
+                const history = {};
+                for (const line of text.split('\n')) {
+                    if (!line) continue;
+                    const rec = JSON.parse(line);
+                    positions.push([rec.team_id, rec.team_name, rec.position, rec.sub_count, rec.score]);
+                    history[rec.team_id] = rec.history || {};
+                }
 
                 if (positions.length === 0) {
                     statusEl.className = 'status';
-                    statusEl.textContent = 'No data available yet';
-                    gridEl.innerHTML = '<div class="no-data">No data yet. The cron job runs every minute.</div>';
+                    statusEl.textContent = 'No data available';
+                    gridEl.innerHTML = '<div class="no-data">No data.</div>';
                     return;
                 }
 
-                gridEl.innerHTML = renderGrid(positions, history);
+                const sortedDates = computeSortedDates(history);
+                if (sortedDates.length === 0) {
+                    gridEl.innerHTML = '<div class="no-data">No historical data recorded.</div>';
+                    statusEl.className = 'status';
+                    statusEl.textContent = 'No historical data';
+                    return;
+                }
 
-                const teamCount = positions.length;
-                const historyCount = Object.keys(history).length;
+                gridEl.innerHTML = buildSkeleton(sortedDates);
+                const tbody = document.getElementById('rows');
+                const CHUNK = 500;
+                let rendered = 0;
+
+                const appendChunk = () => {
+                    const slice = positions.slice(rendered, rendered + CHUNK);
+                    tbody.insertAdjacentHTML('beforeend', buildRowsHTML(slice, history, sortedDates));
+                    rendered += slice.length;
+                };
+
+                appendChunk();
+
+                if (rendered < positions.length) {
+                    gridEl.insertAdjacentHTML('beforeend', '<div id="load-sentinel" style="height:1px"></div>');
+                    const sentinel = document.getElementById('load-sentinel');
+                    const io = new IntersectionObserver((entries) => {
+                        if (!entries.some(e => e.isIntersecting)) return;
+                        appendChunk();
+                        if (rendered >= positions.length) {
+                            io.disconnect();
+                            sentinel.remove();
+                        }
+                    }, { rootMargin: '800px' });
+                    io.observe(sentinel);
+                }
+
                 statusEl.className = 'status success';
-                statusEl.textContent = 'You will see up to 30 minutes of variance in the time';
+                statusEl.textContent = 'Competition ended — static snapshot. Times may vary by up to 30 minutes.';
             } catch (e) {
                 statusEl.className = 'status error';
                 statusEl.textContent = `Error: ${e.message}`;
