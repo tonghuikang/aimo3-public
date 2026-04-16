@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIMO3 Solutions Viewer</title>
+    <!-- KaTeX for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 {
+            text-align: center;
+            color: #00d9ff;
+            margin-bottom: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .questions-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .question-card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .question-card:hover {
+            border-color: #00d9ff;
+            transform: translateY(-2px);
+        }
+        .question-card.selected {
+            border-color: #00d9ff;
+            background: #1a2744;
+        }
+        .question-card.has-solutions {
+            border-color: #10b981;
+        }
+        .question-id {
+            font-family: monospace;
+            color: #00d9ff;
+            font-size: 14px;
+        }
+        .question-preview {
+            font-size: 13px;
+            color: #aaa;
+            margin-top: 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        .solution-count {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+        .solution-count.has-solutions {
+            color: #10b981;
+        }
+        .solutions-panel {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .solutions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .solutions-header h2 {
+            margin: 0;
+            color: #00d9ff;
+        }
+        .solution-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .solution-tab {
+            padding: 8px 16px;
+            background: #0f3460;
+            border: none;
+            border-radius: 4px;
+            color: #eee;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .solution-tab:hover {
+            background: #1a4a7a;
+        }
+        .solution-tab.selected {
+            background: #00d9ff;
+            color: #1a1a2e;
+        }
+        .solution-tab.backtrack {
+            background: #3d2c0f;
+            border: 1px dashed #f59e0b;
+            font-size: 12px;
+        }
+        .solution-tab.backtrack:hover {
+            background: #4d3c1f;
+        }
+        .solution-tab.backtrack.selected {
+            background: #f59e0b;
+            color: #1a1a2e;
+        }
+        .solution-tab .answer {
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        .solution-tab .answer.valid {
+            color: #4ade80;
+        }
+        .solution-tab.selected .answer.valid {
+            color: #166534;
+        }
+        .solution-content {
+            background: #0d1b2a;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .solution-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: #888;
+        }
+        .solution-meta span {
+            background: #16213e;
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+        .message {
+            margin-bottom: 20px;
+            border-left: 3px solid #333;
+            padding-left: 15px;
+        }
+        .message.system {
+            border-color: #f59e0b;
+        }
+        .message.developer {
+            border-color: #8b5cf6;
+        }
+        .message.user {
+            border-color: #3b82f6;
+        }
+        .message.assistant {
+            border-color: #10b981;
+        }
+        .message.tool {
+            border-color: #ec4899;
+        }
+        .message-header {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .message-role {
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .message.system .message-role { color: #f59e0b; }
+        .message.developer .message-role { color: #8b5cf6; }
+        .message.user .message-role { color: #3b82f6; }
+        .message.assistant .message-role { color: #10b981; }
+        .message.tool .message-role { color: #ec4899; }
+        .message-channel {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .message-recipient {
+            background: #4a3728;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .message-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .code-block {
+            background: #1e293b;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+        .message.tool .message-content,
+        .message.python .message-content {
+            padding: 0;
+            background: transparent;
+        }
+        .message.solvers .message-content {
+            background: rgba(245, 158, 11, 0.05);
+            padding: 12px;
+            border-radius: 6px;
+        }
+        .message.python {
+            border-color: #22c55e;
+        }
+        .message.python .message-role {
+            color: #22c55e;
+        }
+        .message.solvers {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+        .message.solvers .message-role {
+            color: #f59e0b;
+        }
+        .python-code {
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            background: #1e293b;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            white-space: pre;
+            display: block;
+            margin: 8px 0;
+        }
+        .boxed-answer {
+            display: inline-block;
+            background: #166534;
+            color: #4ade80;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-family: monospace;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        .no-solutions {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .findings-panel {
+            background: #1a2744;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+        .findings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .findings-header:hover {
+            opacity: 0.9;
+        }
+        .findings-header h3 {
+            margin: 0;
+            color: #f59e0b;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .findings-toggle {
+            transition: transform 0.2s;
+            font-size: 12px;
+        }
+        .findings-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+        .findings-grid {
+            margin-top: 15px;
+        }
+        .findings-grid.collapsed {
+            display: none;
+        }
+        .findings-panel h3 {
+            margin: 0;
+            color: #f59e0b;
+            font-size: 16px;
+        }
+        .findings-summary {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .findings-answer {
+            background: #166534;
+            color: #4ade80;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 15px;
+        }
+        .findings-time {
+            color: #888;
+            font-size: 13px;
+        }
+        .findings-grid {
+            display: grid;
+            gap: 12px;
+        }
+        .finding {
+            background: #0d1b2a;
+            padding: 12px 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            line-height: 1.6;
+            border-left: 3px solid #6b7280;
+        }
+        .finding.all-accepted {
+            border-left-color: #10b981;
+        }
+        .finding.mixed {
+            border-left-color: #f59e0b;
+        }
+        .finding.all-rejected {
+            border-left-color: #ef4444;
+        }
+        .findings-filter {
+            display: none;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .filter-btn {
+            padding: 4px 10px;
+            background: #0f3460;
+            border: none;
+            border-radius: 4px;
+            color: #888;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover {
+            background: #1a4a7a;
+            color: #eee;
+        }
+        .filter-btn.active {
+            background: #00d9ff;
+            color: #1a1a2e;
+        }
+        .finding.hidden {
+            display: none;
+        }
+        .finding-source {
+            display: inline-block;
+            background: #1e3a5f;
+            color: #60a5fa;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .finding-idx {
+            display: inline-block;
+            background: #374151;
+            color: #9ca3af;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-family: monospace;
+            margin-left: 6px;
+        }
+        .finding-tokens {
+            display: inline-block;
+            background: #1f2937;
+            color: #6b7280;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-family: monospace;
+            margin-left: 4px;
+        }
+        .finding-content {
+            color: #d1d5db;
+        }
+        .finding-content code {
+            background: #1e293b;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            color: #93c5fd;
+        }
+        .finding-reviews {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #6b7280;
+        }
+        .raw-toggle, .copy-python-btn {
+            background: #333;
+            border: none;
+            color: #888;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .raw-toggle:hover, .copy-python-btn:hover {
+            background: #444;
+            color: #eee;
+        }
+        .raw-toggle.active {
+            background: #00d9ff;
+            color: #1a1a2e;
+        }
+        .copy-python-btn.copied {
+            background: #10b981;
+            color: #fff;
+        }
+        .channel-analysis { color: #94a3b8; }
+        .channel-commentary { color: #a5b4fc; }
+        .channel-final { color: #fbbf24; }
+        .question-text {
+            background: #0d1b2a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .question-text ul, .question-text ol,
+        .message-content ul, .message-content ol {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        .question-text li, .message-content li {
+            margin: 5px 0;
+        }
+        .question-text-toggle {
+            background: #333;
+            border: none;
+            color: #888;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .question-text-toggle:hover {
+            background: #444;
+            color: #eee;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header-answer {
+            background: #166534;
+            color: #4ade80;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 15px;
+        }
+        .header-time {
+            color: #888;
+            font-size: 13px;
+        }
+        .findings-filters {
+            display: flex;
+            gap: 12px;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AIMO3 Solutions Viewer</h1>
+
+        <div id="run-selector" style="margin-bottom: 20px; display: none;">
+            <label for="run-select" style="color: #888; margin-right: 10px;">Run:</label>
+            <select id="run-select" onchange="selectRun(this.value)" style="background: #16213e; color: #eee; border: 1px solid #333; padding: 8px 12px; border-radius: 4px; font-size: 14px;">
+            </select>
+        </div>
+
+        <div id="questions" class="questions-grid"></div>
+
+        <div id="solutions-panel" class="solutions-panel" style="display: none;">
+            <div class="solutions-header">
+                <div>
+                    <h2 id="selected-question-id">Question</h2>
+                </div>
+                <div class="header-right">
+                    <span class="header-answer" id="header-answer" style="display: none;"></span>
+                    <span class="header-time" id="header-time" style="display: none;"></span>
+                </div>
+            </div>
+            <div id="question-text-container"></div>
+            <div id="findings-container"></div>
+            <div class="solution-tabs" id="solution-tabs"></div>
+            <div id="solution-content" class="solution-content">
+                <div class="no-solutions">Select a solution to view</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Question data will be populated dynamically from solution files
+        let questionData = {}; // questionId -> { text: "...", solutions: [...] }
+
+        // State
+        let availableRuns = []; // list of timestamped run directories
+        let selectedRun = null; // currently selected run
+        let solutionsData = {}; // questionId -> [{file, index, tokens, toolCalls, answer, content}]
+        let findingsData = {}; // questionId -> [finding strings]
+        let selectedQuestion = null;
+        let selectedSolution = null;
+        let showRaw = false;
+        let showQuestion = true;
+        let findingsFilter = 'all'; // 'all', 'accepted', 'rejected'
+
+        // Parse harmony format text into messages
+        function parseHarmonyText(text) {
+            const messages = [];
+
+            // Split by message start markers - supports both <|start|> and <|im_start|>
+            const parts = text.split(/<\|(?:im_)?start\|>/);
+
+            for (let i = 1; i < parts.length; i++) {
+                const part = parts[i];
+
+                // Extract role (first word)
+                const roleMatch = part.match(/^(\w+)/);
+                if (!roleMatch) continue;
+
+                const role = roleMatch[1];
+
+                // Find content after <|message|> marker
+                const messageMatch = part.match(/<\|message\|>([\s\S]*?)(?:<\|(?:im_)?end\|>|$)/);
+                let content = messageMatch ? messageMatch[1] : '';
+
+                // Extract channel and recipient (format: <|channel|>analysis to=python code)
+                let channel = null;
+                let recipient = null;
+                const channelMatch = part.match(/<\|channel\|>(\w+)(?:\s+to=([^<]+))?/);
+                if (channelMatch) {
+                    channel = channelMatch[1];
+                    if (channelMatch[2]) {
+                        recipient = channelMatch[2].trim();
+                    }
+                }
+
+                // Also check for <|recipient|> format
+                if (!recipient) {
+                    const recipientMatch = part.match(/<\|recipient\|>([^<]+)/);
+                    if (recipientMatch) {
+                        recipient = recipientMatch[1].trim();
+                    }
+                }
+
+                // Extract tool name (for tool messages)
+                let toolName = null;
+                const toolNameMatch = part.match(/name=(\w+)/);
+                if (role === 'tool' && toolNameMatch) {
+                    toolName = toolNameMatch[1];
+                }
+
+                // Clean up content
+                content = content.trim();
+
+                if (content || role === 'system') {
+                    messages.push({
+                        role,
+                        channel,
+                        recipient,
+                        toolName,
+                        content
+                    });
+                }
+            }
+
+            return messages;
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Convert $...$ to \(...\) for single-line math, \[...\] for multi-line
+        function convertDollarToParens(html) {
+            // First handle $$...$$ display math - convert to \[...\]
+            html = html.replace(/\$\$([\s\S]*?)\$\$/g, '\\[$1\\]');
+
+            // Then handle single $...$ - convert to \(...\) if single line, \[...\] if multi-line
+            html = html.replace(/\$([^$]*)\$/g, (match, content) => {
+                if (content.includes('\n')) {
+                    // Multi-line: convert to display math \[...\]
+                    return '\\[' + content + '\\]';
+                }
+                // Single-line: convert to \(...\) which is safer
+                return '\\(' + content + '\\)';
+            });
+
+            // Convert display math environments to \[...\] - these are outer environments
+            // equation, equation*, align, align*, gather, gather* -> \[content\]
+            const displayEnvs = ['equation\\*', 'equation', 'align\\*', 'align', 'gather\\*', 'gather'];
+            for (const env of displayEnvs) {
+                const pattern = new RegExp(`\\\\begin\\{${env}\\}([\\s\\S]*?)\\\\end\\{${env}\\}`, 'g');
+                html = html.replace(pattern, '\\[$1\\]');
+            }
+
+            // Clean up any stray \] that might be left after environment conversion
+            // This handles cases where source had nested delimiters
+            html = html.replace(/\\\]\s*\\\]/g, '\\]');
+            html = html.replace(/\\\[\s*\\\[/g, '\\[');
+
+            return html;
+        }
+
+        // Convert LaTeX text commands to HTML (must be called AFTER escapeHtml)
+        function convertLatexTextToHtml(html) {
+            // Convert \emph{...} to <em>...</em>
+            html = html.replace(/\\emph\{([^}]+)\}/g, '<em>$1</em>');
+
+            // Convert \textbf{...} to <strong>...</strong>
+            html = html.replace(/\\textbf\{([^}]+)\}/g, '<strong>$1</strong>');
+
+            // Convert \textit{...} to <em>...</em>
+            html = html.replace(/\\textit\{([^}]+)\}/g, '<em>$1</em>');
+
+            // Convert itemize environment to ul/li
+            html = html.replace(/\\begin\{itemize\}/g, '<ul>');
+            html = html.replace(/\\end\{itemize\}/g, '</ul>');
+
+            // Convert enumerate environment to ol/li
+            html = html.replace(/\\begin\{enumerate\}/g, '<ol>');
+            html = html.replace(/\\end\{enumerate\}/g, '</ol>');
+
+            // Convert \item to <li> - match \item followed by content until next \item or \end
+            // First, we need to close previous <li> tags properly
+            // Split by \item and reassemble with proper <li></li> tags
+            html = html.replace(/\\item\s*/g, '</li><li>');
+
+            // Clean up: remove empty </li> at start of lists and add closing </li> before </ul> or </ol>
+            html = html.replace(/<ul>\s*<\/li>/g, '<ul>');
+            html = html.replace(/<ol>\s*<\/li>/g, '<ol>');
+            html = html.replace(/<li>(\s*)<\/ul>/g, '</li>$1</ul>');
+            html = html.replace(/<li>(\s*)<\/ol>/g, '</li>$1</ol>');
+
+            return html;
+        }
+
+        // Render messages
+        function renderMessages(messages) {
+            let html = '';
+
+            for (const msg of messages) {
+                // Use toolName as class for special tool types like 'solvers'
+                const roleClass = (msg.role === 'tool' && msg.toolName) ? msg.toolName : (msg.role || 'unknown');
+                html += `<div class="message ${roleClass}">`;
+                html += `<div class="message-header">`;
+                html += `<span class="message-role">${msg.role || 'unknown'}${msg.toolName ? ' (' + msg.toolName + ')' : ''}</span>`;
+                if (msg.channel) {
+                    html += `<span class="message-channel channel-${msg.channel}">${msg.channel}</span>`;
+                }
+                if (msg.recipient) {
+                    html += `<span class="message-recipient">to: ${msg.recipient}</span>`;
+                }
+                html += `</div>`;
+
+                // Format content - escape first, then add formatting
+                let content = escapeHtml(msg.content);
+
+                // Convert $...$ to \(...\) for single-line math (prevents cross-paragraph matching)
+                content = convertDollarToParens(content);
+
+                // Convert LaTeX text commands to HTML
+                content = convertLatexTextToHtml(content);
+
+                // Remove <|call|> tags in rendered view
+                content = content.replace(/&lt;\|call\|&gt;/g, '');
+
+                // Format Python code blocks (```python ... ```)
+                content = content.replace(/```python\n([\s\S]*?)```/g, '<pre class="python-code">$1</pre>');
+                content = content.replace(/```\n([\s\S]*?)```/g, '<pre class="python-code">$1</pre>');
+
+                // Highlight boxed answers (after escaping)
+                content = content.replace(/\\boxed\{([^}]+)\}/g, '<span class="boxed-answer">\\boxed{$1}</span>');
+
+                // Detect if message should be rendered as code (no LaTeX)
+                // Solvers tool messages contain natural language findings, not code
+                const isCodeMessage =
+                    (msg.role === 'assistant' && msg.recipient === 'python code') ||
+                    msg.role === 'python' ||
+                    (msg.role === 'tool' && msg.toolName !== 'solvers');
+
+                if (isCodeMessage) {
+                    html += `<div class="message-content"><pre class="python-code">${content}</pre></div>`;
+                } else {
+                    html += `<div class="message-content">${content}</div>`;
+                }
+                html += `</div>`;
+            }
+
+            return html;
+        }
+
+        // Render raw text
+        function renderRawText(text) {
+            return `<pre class="code-block" style="max-height: none;">${escapeHtml(text)}</pre>`;
+        }
+
+        // Render questions grid
+        function renderQuestions() {
+            const container = document.getElementById('questions');
+            const questionIds = Object.keys(questionData);
+
+            let html = '';
+            for (const qid of questionIds) {
+                const problem = questionData[qid]?.text || 'No question text available';
+                const solutions = solutionsData[qid] || [];
+                const hasSolutions = solutions.length > 0;
+
+                html += `<div class="question-card ${hasSolutions ? 'has-solutions' : ''}" data-qid="${qid}" onclick="selectQuestion('${qid}')">`;
+                html += `<div class="question-id">${qid}</div>`;
+                html += `<div class="question-preview">${escapeHtml(problem.substring(0, 200))}${problem.length > 200 ? '...' : ''}</div>`;
+                html += `<div class="solution-count ${hasSolutions ? 'has-solutions' : ''}">${solutions.length} solution(s)</div>`;
+                html += `</div>`;
+            }
+
+            container.innerHTML = html;
+            renderLatex(container);
+        }
+
+        // Select a question
+        function selectQuestion(questionId) {
+            selectedQuestion = questionId;
+            selectedSolution = null;
+            showQuestion = true;
+
+            // Update UI
+            document.querySelectorAll('.question-card').forEach(card => {
+                card.classList.toggle('selected', card.dataset.qid === questionId);
+            });
+
+            const panel = document.getElementById('solutions-panel');
+            panel.style.display = 'block';
+
+            document.getElementById('selected-question-id').textContent = `Question: ${questionId}`;
+
+            // Render question text
+            const questionTextContainer = document.getElementById('question-text-container');
+            const problemText = questionData[questionId]?.text || 'Unknown problem';
+            questionTextContainer.innerHTML = `<div class="question-text">${convertDollarToParens(convertLatexTextToHtml(escapeHtml(problemText)))}</div>`;
+            renderLatex(questionTextContainer);
+
+            // Render solution tabs
+            const solutions = solutionsData[questionId] || [];
+            const tabsContainer = document.getElementById('solution-tabs');
+
+            // Get findings data for this question to calculate sent/received counts
+            const qFindings = findingsData[questionId];
+
+            let tabsHtml = '';
+            for (const sol of solutions) {
+                const isValid = sol.answer !== 'NA';
+                // Show answer history from parsed content, deduplicated
+                const uniqueAnswers = [...new Set(sol.answerHistory || [])];
+                const answerDisplay = uniqueAnswers.length > 1 ? uniqueAnswers.join(' > ') : sol.answer;
+
+                // Calculate findings sent (authored by this solver) and received (reviewed by this solver)
+                let findingsSent = 0;
+                let findingsReceived = 0;
+                if (qFindings && qFindings.findings) {
+                    for (const f of qFindings.findings) {
+                        if (f.solver_index === sol.index) {
+                            findingsSent++;
+                        }
+                        // Received = appears in accepted or rejected but not as author
+                        if (f.solver_index !== sol.index) {
+                            if ((f.accepted_solver_indexes || []).includes(sol.index) ||
+                                (f.rejected_solver_indexes || []).includes(sol.index)) {
+                                findingsReceived++;
+                            }
+                        }
+                    }
+                }
+
+                tabsHtml += `<button class="solution-tab ${sol.isBacktrack ? 'backtrack' : ''}" data-file="${sol.file}" onclick="selectSolution('${questionId}', '${sol.file}')">`;
+                if (sol.isBacktrack) {
+                    tabsHtml += `#${sol.index}-bt${sol.backtrackNum} (${sol.tokens}t) `;
+                } else {
+                    tabsHtml += `#${sol.index} (${sol.tokens}t, ${sol.toolCalls}p) `;
+                }
+                tabsHtml += `<span class="answer ${isValid ? 'valid' : ''}">${answerDisplay}</span>`;
+                tabsHtml += `</button>`;
+            }
+            tabsHtml += `<button class="raw-toggle ${showRaw ? 'active' : ''}" onclick="toggleRaw()">Raw</button>`;
+            tabsHtml += `<button class="copy-python-btn" onclick="copyPythonCode()">Copy Python</button>`;
+            tabsContainer.innerHTML = tabsHtml;
+
+            // Render findings (from JSON format)
+            const findingsJson = findingsData[questionId];
+            const findingsContainer = document.getElementById('findings-container');
+            const headerAnswer = document.getElementById('header-answer');
+            const headerTime = document.getElementById('header-time');
+
+            // Update header answer and time
+            if (findingsJson && findingsJson.final_answer !== undefined) {
+                headerAnswer.textContent = `Answer: ${findingsJson.final_answer}`;
+                headerAnswer.style.display = 'inline-block';
+            } else {
+                headerAnswer.style.display = 'none';
+            }
+            if (findingsJson && findingsJson.time_taken !== undefined) {
+                headerTime.textContent = `⏱ ${findingsJson.time_taken}s`;
+                headerTime.style.display = 'inline-block';
+            } else {
+                headerTime.style.display = 'none';
+            }
+
+            if (findingsJson && findingsJson.findings) {
+                // Categorize findings: all-accepted, mixed, all-rejected (ignoring author's own vote)
+                function getOtherVotes(f) {
+                    const author = f.solver_index;
+                    const accepted = (f.accepted_solver_indexes || []).filter(idx => idx !== author);
+                    const rejected = (f.rejected_solver_indexes || []).filter(idx => idx !== author);
+                    return { accepted, rejected };
+                }
+                const allAcceptedCount = findingsJson.findings.filter(f => {
+                    const v = getOtherVotes(f);
+                    return v.accepted.length > 0 && v.rejected.length === 0;
+                }).length;
+                const allRejectedCount = findingsJson.findings.filter(f => {
+                    const v = getOtherVotes(f);
+                    return v.accepted.length === 0 && v.rejected.length > 0;
+                }).length;
+                const mixedCount = findingsJson.findings.filter(f => {
+                    const v = getOtherVotes(f);
+                    return v.accepted.length > 0 && v.rejected.length > 0;
+                }).length;
+
+                let findingsHtml = '<div class="findings-panel">';
+                findingsHtml += '<div class="findings-header">';
+                findingsHtml += '<h3 onclick="toggleFindings()" style="cursor: pointer;"><span class="findings-toggle collapsed" id="findings-toggle">▼</span> Key Findings</h3>';
+                findingsHtml += '<div class="findings-filters">';
+                findingsHtml += `<button class="filter-btn" data-filter="all-accepted" onclick="event.stopPropagation(); setFindingsFilter('all-accepted')">All Accepted (${allAcceptedCount})</button>`;
+                findingsHtml += `<button class="filter-btn" data-filter="mixed" onclick="event.stopPropagation(); setFindingsFilter('mixed')">Mixed (${mixedCount})</button>`;
+                findingsHtml += `<button class="filter-btn" data-filter="all-rejected" onclick="event.stopPropagation(); setFindingsFilter('all-rejected')">All Rejected (${allRejectedCount})</button>`;
+                findingsHtml += '</div>';
+                findingsHtml += '</div>';
+
+                if (findingsJson.findings.length > 0) {
+                    findingsHtml += '<div class="findings-grid collapsed" id="findings-grid">';
+                    for (const f of findingsJson.findings) {
+                        const v = getOtherVotes(f);
+                        let statusClass = '';
+                        if (v.accepted.length > 0 && v.rejected.length === 0) statusClass = 'all-accepted';
+                        else if (v.accepted.length === 0 && v.rejected.length > 0) statusClass = 'all-rejected';
+                        else if (v.accepted.length > 0 && v.rejected.length > 0) statusClass = 'mixed';
+                        const hiddenClass = '';
+                        findingsHtml += `<div class="finding ${statusClass} ${hiddenClass}">`;
+                        findingsHtml += `<span class="finding-source">Solver ${f.solver_index}</span>`;
+                        findingsHtml += `<span class="finding-tokens">${f.author_solver_token_count}t</span>`;
+                        findingsHtml += `<span class="finding-idx">#${f.finding_idx}</span>`;
+                        findingsHtml += `<div class="finding-content">${formatFindingContent(f.finding)}</div>`;
+                        // Show solver reviews as grey text at the bottom, sorted by solver index
+                        let reviews = [];
+                        if (f.accepted_solver_indexes) {
+                            for (const idx of f.accepted_solver_indexes) {
+                                reviews.push({idx, result: 'YES'});
+                            }
+                        }
+                        if (f.rejected_solver_indexes) {
+                            for (const idx of f.rejected_solver_indexes) {
+                                reviews.push({idx, result: 'NO'});
+                            }
+                        }
+                        reviews.sort((a, b) => a.idx - b.idx);
+                        if (reviews.length > 0) {
+                            const reviewLines = reviews.map(r => `Solver ${r.idx}: ${r.result}`);
+                            findingsHtml += `<div class="finding-reviews">${reviewLines.join('<br>')}</div>`;
+                        }
+                        findingsHtml += `</div>`;
+                    }
+                    findingsHtml += '</div>';
+                }
+                findingsHtml += '</div>';
+                findingsContainer.innerHTML = findingsHtml;
+                renderLatex(findingsContainer);
+            } else {
+                findingsContainer.innerHTML = '';
+            }
+
+            // Select solution with accepted answer by default (not NA), otherwise first solution
+            const content = document.getElementById('solution-content');
+            if (solutions.length > 0) {
+                const acceptedSolution = solutions.find(s => s.answer !== 'NA') || solutions[0];
+                selectSolution(questionId, acceptedSolution.file);
+            } else {
+                content.innerHTML = '<div class="no-solutions">No solutions available.</div>';
+            }
+            updateUrl();
+        }
+
+        // Select a solution
+        function selectSolution(questionId, filename) {
+            selectedSolution = filename;
+            updateUrl();
+
+            // Update tabs
+            document.querySelectorAll('.solution-tab').forEach(tab => {
+                tab.classList.toggle('selected', tab.dataset.file === filename);
+            });
+
+            const content = document.getElementById('solution-content');
+            const solutions = solutionsData[questionId] || [];
+            const sol = solutions.find(s => s.file === filename);
+
+            if (!sol || !sol.content) {
+                content.innerHTML = '<div class="no-solutions">Solution content not available</div>';
+                return;
+            }
+
+            // Parse filename for metadata
+            // Calculate findings sent/received for this solver
+            const qFindingsForMeta = findingsData[questionId];
+            let metaFindingsSent = 0;
+            let metaFindingsReceived = 0;
+            if (qFindingsForMeta && qFindingsForMeta.findings) {
+                for (const f of qFindingsForMeta.findings) {
+                    if (f.solver_index === sol.index) {
+                        metaFindingsSent++;
+                    }
+                    if (f.solver_index !== sol.index) {
+                        if ((f.accepted_solver_indexes || []).includes(sol.index) ||
+                            (f.rejected_solver_indexes || []).includes(sol.index)) {
+                            metaFindingsReceived++;
+                        }
+                    }
+                }
+            }
+
+            let metaHtml = `<div class="solution-meta">
+                <span>Solver #${sol.index}${sol.isBacktrack ? ' (Backtrack ' + sol.backtrackNum + ')' : ''}</span>
+                <span>${sol.tokens} tokens</span>
+                <span>${sol.toolCalls} python calls</span>`;
+            if (qFindingsForMeta && qFindingsForMeta.findings) {
+                metaHtml += `<span>${metaFindingsSent} findings sent</span>`;
+                metaHtml += `<span>${metaFindingsReceived} findings received</span>`;
+            }
+            metaHtml += `<span>Answer: ${sol.answer}</span>
+            </div>`;
+
+            if (showRaw) {
+                content.innerHTML = metaHtml + renderRawText(sol.content);
+            } else {
+                const messages = parseHarmonyText(sol.content);
+                content.innerHTML = metaHtml + renderMessages(messages);
+            }
+            renderLatex(content);
+        }
+
+        // Parse findings into structured data
+        function parseFindings(findings) {
+            const result = {
+                insights: [],
+                finalAnswer: null,
+                timeTaken: null
+            };
+
+            // First pass: merge continuation lines (lines without [Tag]:) with previous line
+            const mergedLines = [];
+            for (const line of findings) {
+                const isTaggedLine = /^\[(Solution \d+|Solver \d+|Final answer|Time taken)\]:/.test(line);
+                if (isTaggedLine) {
+                    mergedLines.push(line);
+                } else if (line.trim() && mergedLines.length > 0) {
+                    // Continuation line - append to previous
+                    mergedLines[mergedLines.length - 1] += '\n' + line;
+                }
+            }
+
+            for (const line of mergedLines) {
+                // Extract final answer
+                const answerMatch = line.match(/^\[Final answer\]:\s*(.+)$/s);
+                if (answerMatch) {
+                    result.finalAnswer = answerMatch[1].trim();
+                    continue;
+                }
+
+                // Extract time taken
+                const timeMatch = line.match(/^\[Time taken\]:\s*(.+)$/s);
+                if (timeMatch) {
+                    result.timeTaken = timeMatch[1].trim();
+                    continue;
+                }
+
+                // Extract solution/solver insights
+                const solutionMatch = line.match(/^\[(Solution|Solver) (\d+)\]:\s*([\s\S]+)$/);
+                if (solutionMatch) {
+                    result.insights.push({
+                        source: `Solver ${solutionMatch[2]}`,
+                        content: solutionMatch[3].trim()
+                    });
+                    continue;
+                }
+            }
+
+            return result;
+        }
+
+        // Format finding content (escape HTML but preserve LaTeX for rendering)
+        function formatFindingContent(content) {
+            // Convert \framebox{...} to \(\boxed{...}\) since KaTeX doesn't support \framebox
+            // Use a function to properly handle balanced braces
+            content = replaceFramebox(content);
+            let escaped = escapeHtml(content);
+            // LaTeX delimiters are preserved - renderLatex() will process them
+            return escaped;
+        }
+
+        // Replace \framebox{...} with \(\boxed{...}\), handling balanced braces
+        function replaceFramebox(str) {
+            const marker = '\\framebox{';
+            let result = '';
+            let i = 0;
+            while (i < str.length) {
+                const idx = str.indexOf(marker, i);
+                if (idx === -1) {
+                    result += str.slice(i);
+                    break;
+                }
+                result += str.slice(i, idx);
+                // Find matching closing brace
+                let depth = 1;
+                let j = idx + marker.length;
+                while (j < str.length && depth > 0) {
+                    if (str[j] === '{') depth++;
+                    else if (str[j] === '}') depth--;
+                    j++;
+                }
+                // Extract content between braces
+                let innerContent = str.slice(idx + marker.length, j - 1).trim();
+                // If content already has math delimiters, extract inner content and wrap with boxed
+                if (innerContent.startsWith('\\(') && innerContent.endsWith('\\)')) {
+                    // Remove outer \( \) and wrap properly
+                    const mathContent = innerContent.slice(2, -2);
+                    result += '\\(\\boxed{' + mathContent + '}\\)';
+                } else if (innerContent.startsWith('$') && innerContent.endsWith('$')) {
+                    // Remove outer $ $ and wrap properly
+                    const mathContent = innerContent.slice(1, -1);
+                    result += '\\(\\boxed{' + mathContent + '}\\)';
+                } else {
+                    // No delimiters, add them
+                    result += '\\(\\boxed{' + innerContent + '}\\)';
+                }
+                i = j;
+            }
+            return result;
+        }
+
+        // Toggle raw view
+        function toggleRaw() {
+            showRaw = !showRaw;
+            document.querySelectorAll('.raw-toggle').forEach(btn => {
+                btn.classList.toggle('active', showRaw);
+            });
+            if (selectedQuestion && selectedSolution) {
+                selectSolution(selectedQuestion, selectedSolution);
+            }
+        }
+
+        // Copy all Python code from current solution
+        function copyPythonCode() {
+            if (!selectedQuestion || !selectedSolution) return;
+
+            const solutions = solutionsData[selectedQuestion] || [];
+            const sol = solutions.find(s => s.file === selectedSolution);
+            if (!sol || !sol.content) return;
+
+            // Parse the harmony text to extract python code cells
+            const messages = parseHarmonyText(sol.content);
+            const pythonCells = [];
+
+            for (const msg of messages) {
+                // Assistant messages with recipient "python code" contain python
+                if (msg.role === 'assistant' && msg.recipient === 'python code' && msg.content) {
+                    // Remove <|call|> tags and strip all trailing whitespace/newlines
+                    let code = msg.content.replace(/<\|call\|>/g, '').trim().replace(/\n+$/, '');
+                    pythonCells.push(code);
+                }
+            }
+
+            if (pythonCells.length === 0) {
+                alert('No Python code found in this solution');
+                return;
+            }
+
+            // Join all cells with just double newlines (no markers)
+            const allCode = pythonCells.join('\n\n');
+
+            // Copy to clipboard as plain text
+            navigator.clipboard.writeText(allCode).then(() => {
+                const btn = document.querySelector('.copy-python-btn');
+                if (btn) {
+                    btn.classList.add('copied');
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        btn.textContent = 'Copy Python';
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+
+        // Toggle findings collapse
+        function toggleFindings() {
+            const toggle = document.getElementById('findings-toggle');
+            const grid = document.getElementById('findings-grid');
+            const filter = document.getElementById('findings-filter');
+            if (toggle && grid) {
+                toggle.classList.toggle('collapsed');
+                grid.classList.toggle('collapsed');
+                if (filter) {
+                    filter.style.display = grid.classList.contains('collapsed') ? 'none' : 'flex';
+                }
+            }
+        }
+
+        // Set findings filter (toggle buttons - both can be on or off)
+        function setFindingsFilter(filter) {
+            // Toggle the clicked filter button
+            event.target.classList.toggle('active');
+
+            // Get active filters
+            const activeFilters = [];
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.classList.contains('active')) {
+                    activeFilters.push(btn.dataset.filter);
+                }
+            });
+
+            // Update visibility of findings
+            document.querySelectorAll('.finding').forEach(el => {
+                const isAllAccepted = el.classList.contains('all-accepted');
+                const isMixed = el.classList.contains('mixed');
+                const isAllRejected = el.classList.contains('all-rejected');
+
+                // Show if any active filter matches, or show all if no filters active
+                if (activeFilters.length === 0 || activeFilters.length === 3) {
+                    el.classList.remove('hidden');
+                } else {
+                    const shouldShow =
+                        (isAllAccepted && activeFilters.includes('all-accepted')) ||
+                        (isMixed && activeFilters.includes('mixed')) ||
+                        (isAllRejected && activeFilters.includes('all-rejected'));
+                    el.classList.toggle('hidden', !shouldShow);
+                }
+            });
+        }
+
+        // Extract question text from first user message in solution content
+        function extractQuestionFromContent(content) {
+            // Find the first user message
+            const userMatch = content.match(/<\|(?:im_)?start\|>user<\|message\|>([\s\S]*?)(?:<\|(?:im_)?end\|>|<\|(?:im_)?start\|>)/);
+            if (userMatch) {
+                return userMatch[1].trim();
+            }
+            return null;
+        }
+
+        // Select a run and load its data
+        async function selectRun(run) {
+            selectedRun = run;
+            // Reset data
+            questionData = {};
+            solutionsData = {};
+            findingsData = {};
+            selectedQuestion = null;
+            selectedSolution = null;
+            document.getElementById('solutions-panel').style.display = 'none';
+            await loadRunData(run);
+            renderQuestions();
+
+            // Auto-select the first question
+            const questionIds = Object.keys(questionData);
+            if (questionIds.length > 0) {
+                selectQuestion(questionIds[0]);
+            }
+            updateUrl();
+        }
+
+        // Fetch solutions and findings from server
+        async function loadData() {
+            // First, discover available runs from runs directory
+            availableRuns = [];
+            let candidateRuns = [];
+            try {
+                const response = await fetch('runs/');
+                if (response.ok) {
+                    const html = await response.text();
+                    // Parse directory listing for timestamped subdirectories (YYYY-MM-DD-HH-MM-SS)
+                    const dirMatches = html.matchAll(/href="(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})\/"/g);
+                    for (const match of dirMatches) {
+                        candidateRuns.push(match[1]);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to list runs directory:', e);
+            }
+
+            // Filter out empty runs (must have actual solution files)
+            for (const run of candidateRuns) {
+                try {
+                    const response = await fetch(`runs/${run}/solutions/`);
+                    if (!response.ok) continue;
+
+                    const html = await response.text();
+                    // Get question subdirectories (hex IDs)
+                    const questionMatches = html.matchAll(/href="([a-zA-Z0-9_]+)\/"/g);
+
+                    // Check if any question directory has actual solution files
+                    let hasFiles = false;
+                    for (const match of questionMatches) {
+                        const qid = match[1];
+                        const qResponse = await fetch(`runs/${run}/solutions/${qid}/`);
+                        if (qResponse.ok) {
+                            const qHtml = await qResponse.text();
+                            // Check for -text.txt files
+                            if (/-text\.txt/.test(qHtml)) {
+                                hasFiles = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (hasFiles) {
+                        availableRuns.push(run);
+                    }
+                } catch (e) {}
+            }
+            // Sort runs in descending order (most recent first)
+            availableRuns.sort().reverse();
+
+            // Populate run selector
+            const runSelector = document.getElementById('run-selector');
+            const runSelect = document.getElementById('run-select');
+            if (availableRuns.length > 0) {
+                runSelector.style.display = 'block';
+                runSelect.innerHTML = availableRuns.map(run =>
+                    `<option value="${run}">${run}</option>`
+                ).join('');
+
+                // If no hash, load first run and auto-select
+                // Otherwise parseUrlAndNavigate will handle it
+                if (!window.location.hash) {
+                    selectedRun = availableRuns[0];
+                    await loadRunData(selectedRun);
+                    renderQuestions();
+                    const questionIds = Object.keys(questionData);
+                    if (questionIds.length > 0) {
+                        selectQuestion(questionIds[0]);
+                    }
+                }
+            } else {
+                runSelector.style.display = 'none';
+            }
+        }
+
+        // Load data for a specific run
+        async function loadRunData(run) {
+            const basePath = `runs/${run}/solutions`;
+
+            // Clear existing data
+            questionData = {};
+            solutionsData = {};
+            findingsData = {};
+
+            // Discover question IDs from run directory
+            let questionIds = [];
+            try {
+                const response = await fetch(`${basePath}/`);
+                if (response.ok) {
+                    const html = await response.text();
+                    // Parse directory listing for subdirectories (question IDs)
+                    const dirMatches = html.matchAll(/href="([a-zA-Z0-9_]+)\/"/g);
+                    for (const match of dirMatches) {
+                        questionIds.push(match[1]);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to list run directory:', e);
+            }
+
+            // Fetch solutions for each question
+            for (const qid of questionIds) {
+                try {
+                    const response = await fetch(`${basePath}/${qid}/`);
+                    if (!response.ok) continue;
+
+                    const html = await response.text();
+                    // Parse directory listing for -text.txt files
+                    const fileMatches = html.matchAll(/href="([^"]*-text\.txt)"/g);
+
+                    for (const match of fileMatches) {
+                        const filename = match[1];
+                        // Try backtrack format first: {solver}-{tokens}-{python_calls}-backtrack-{backtrack_num}-{answer}-text.txt
+                        let parsed = filename.match(/(\d+)-(\d+)-(\d+)-backtrack-(\d+)-(\w+)-text\.txt/);
+                        let isBacktrack = false;
+                        let backtrackNum = null;
+                        let index, tokens, toolCalls, answer;
+
+                        if (parsed) {
+                            isBacktrack = true;
+                            [, index, tokens, toolCalls, backtrackNum, answer] = parsed;
+                        } else {
+                            // Try normal format: {solver}-{tokens}-{python_calls}-{answer}-text.txt
+                            parsed = filename.match(/(\d+)-(\d+)-(\d+)-(\w+)-text\.txt/);
+                            if (!parsed) continue;
+                            [, index, tokens, toolCalls, answer] = parsed;
+                        }
+
+                        try {
+                            const contentResponse = await fetch(`${basePath}/${qid}/${filename}`);
+                            if (!contentResponse.ok) continue;
+                            const content = await contentResponse.text();
+
+                            // Extract answer history from \boxed{} in content
+                            const boxedMatches = content.matchAll(/\\boxed\{(\d+)\}/g);
+                            const answerHistory = [...boxedMatches].map(m => m[1]);
+
+                            if (!solutionsData[qid]) solutionsData[qid] = [];
+                            solutionsData[qid].push({
+                                file: filename,
+                                index: parseInt(index),
+                                tokens: parseInt(tokens),
+                                toolCalls: parseInt(toolCalls),
+                                answer,
+                                answerHistory,
+                                content,
+                                isBacktrack,
+                                backtrackNum: backtrackNum ? parseInt(backtrackNum) : null
+                            });
+
+                            // Extract question text from first solution if not already set
+                            if (!questionData[qid]) {
+                                const questionText = extractQuestionFromContent(content);
+                                if (questionText) {
+                                    questionData[qid] = { text: questionText };
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    // Sort by index, then by backtrack number (non-backtracks first, then by backtrack number)
+                    if (solutionsData[qid]) {
+                        solutionsData[qid].sort((a, b) => {
+                            if (a.index !== b.index) return a.index - b.index;
+                            // Same solver index: non-backtrack first, then by backtrack number
+                            if (!a.isBacktrack && b.isBacktrack) return -1;
+                            if (a.isBacktrack && !b.isBacktrack) return 1;
+                            if (a.isBacktrack && b.isBacktrack) {
+                                return a.backtrackNum - b.backtrackNum;
+                            }
+                            return 0;
+                        });
+                    }
+                } catch (e) {}
+            }
+
+            // Fetch findings (JSON format)
+            for (const qid of questionIds) {
+                try {
+                    const response = await fetch(`runs/${run}/findings/${qid}.json`);
+                    if (!response.ok) continue;
+                    const data = await response.json();
+                    findingsData[qid] = data;
+                } catch (e) {}
+            }
+        }
+
+        // Render LaTeX in an element (skip code blocks)
+        function renderLatex(element) {
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(element, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        // Skip single $ - it matches incorrectly across paragraphs
+                        // {left: '$', right: '$', display: false},
+                        {left: '\\[', right: '\\]', display: true},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\begin{equation*}', right: '\\end{equation*}', display: true},
+                        {left: '\\begin{equation}', right: '\\end{equation}', display: true}
+                    ],
+                    throwOnError: false,
+                    ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+                    ignoredClasses: ['python-code', 'code-block']
+                });
+            }
+        }
+
+        // Update URL hash based on current selection
+        function updateUrl() {
+            const params = [];
+            if (selectedRun) params.push(`run=${selectedRun}`);
+            if (selectedQuestion) params.push(`question=${selectedQuestion}`);
+            if (selectedSolution && selectedQuestion) {
+                // Find the solution index from the filename
+                const solutions = solutionsData[selectedQuestion] || [];
+                const sol = solutions.find(s => s.file === selectedSolution);
+                if (sol) {
+                    params.push(`solution=${sol.index}`);
+                }
+            }
+            window.history.replaceState(null, '', '#' + params.join('&'));
+        }
+
+        // Parse URL hash and navigate to saved state
+        async function parseUrlAndNavigate() {
+            const hash = window.location.hash.slice(1);
+            if (!hash) return;
+
+            const params = {};
+            for (const part of hash.split('&')) {
+                const [key, value] = part.split('=');
+                if (key && value) params[key] = decodeURIComponent(value);
+            }
+
+            if (params.run && availableRuns.includes(params.run)) {
+                document.getElementById('run-select').value = params.run;
+                selectedRun = params.run;
+                await loadRunData(params.run);
+                renderQuestions();
+
+                if (params.question && questionData[params.question]) {
+                    selectQuestion(params.question);
+
+                    if (params.solution) {
+                        const solutions = solutionsData[params.question] || [];
+                        const solutionIndex = parseInt(params.solution, 10);
+                        const sol = solutions.find(s => s.index === solutionIndex);
+                        if (sol) {
+                            selectSolution(params.question, sol.file);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Initialize
+        loadData().then(() => parseUrlAndNavigate());
+    </script>
+</body>
+</html>
