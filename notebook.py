@@ -22,17 +22,15 @@ run_all_questions_on_kaggle = False  # ignored for submissions
 # additional settings
 save_communication_enabled = True
 maybe_collaborate_enabled = True
-replication_count_for_commit_runs = 50
-model_path = "/kaggle/input/models/huikang/gpt-oss-120b-aimo3/transformers/160a/14"
-
-assert serve_vllm_on_kaggle is True
+replication_count_for_commit_runs = 10
+model_path = "/kaggle/input/models/huikang/gpt-oss-120b-aimo3/transformers/160a/9"
 
 # %% [code] {"jupyter":{"outputs_hidden":false},"execution":{"iopub.status.busy":"2025-12-29T08:53:22.706627Z","iopub.execute_input":"2025-12-29T08:53:22.706743Z","iopub.status.idle":"2025-12-29T08:53:22.717113Z","shell.execute_reply.started":"2025-12-29T08:53:22.706733Z","shell.execute_reply":"2025-12-29T08:53:22.716712Z"}}
 import os
 import time
 
 start_time = time.time()
-total_available_time = (9 * 60 + 58) * 60
+total_available_time = (4 * 60 + 58) * 60  # 5 hours
 final_cutoff_time = start_time + total_available_time
 
 
@@ -46,10 +44,6 @@ def is_on_kaggle_interactive() -> bool:
     return os.getenv("KAGGLE_KERNEL_RUN_TYPE") == "Interactive" and not bool(
         os.getenv("KAGGLE_IS_COMPETITION_RERUN")
     )
-
-
-def is_on_kaggle_submission() -> bool:
-    return bool(os.getenv("KAGGLE_IS_COMPETITION_RERUN"))
 
 
 def is_on_kaggle() -> bool:
@@ -73,8 +67,6 @@ if is_on_kaggle():
     # set to False on Kaggle so it does not cause issues with creating many files
     save_communication_enabled = False
 
-if is_on_kaggle_submission():
-    total_available_time = (4 * 60 + 58) * 60  # 5 hours
 
 # Some debugger warnings on Kaggle
 os.environ["PYDEVD_DISABLE_FILE_VALIDATION"] = "1"
@@ -1098,14 +1090,7 @@ def extract_boxed_text(text: str) -> str:
 def is_valid_answer_string(text: str) -> bool:
     try:
         if int(text) == float(text):
-            answer = int(text)
-            if 0 <= answer <= 99_999:
-                if answer == 0:
-                    return False
-                if answer == 1:
-                    return False
-                if answer == 12345:
-                    return False
+            if 0 <= int(text) <= 99_999:
                 # now AIMO answers no longer need modulo
                 return True
     except Exception:
@@ -2621,13 +2606,23 @@ def predict(id_: pl.Series, problem: pl.Series) -> pl.DataFrame | pd.DataFrame:
             if serve_vllm_on_kaggle:
                 # to only run for hard problems
                 if not (
-                    # "Norwe" in question_text  # noqa: E713
-                    # or "Alice" in question_text
-                    # or "tournament" in question_text
-                    # or "KNK" in question_text
-                    "shifty" in question_text
+                    "Norwe" in question_text  # noqa: E713
+                    or "Alice" in question_text
+                    or "tournament" in question_text
+                    or "KNK" in question_text
+                    or "shifty" in question_text
                 ):
                     print("on kaggle commit serving vllm, skipping question")
+                    # not popping cutoff_times
+                    return pl.DataFrame({"id": id_, "answer": 12315})
+            else:
+                # to get quicker feedback
+                if not (
+                    "shifty" in question_text  # noqa: E713
+                    # or "tournament" in question_text
+                    # or "KNK" in question_text
+                ):  # noqa: E713
+                    print("on kaggle commit remote vllm, skipping question")
                     # not popping cutoff_times
                     return pl.DataFrame({"id": id_, "answer": 12315})
 
@@ -2644,21 +2639,6 @@ def predict(id_: pl.Series, problem: pl.Series) -> pl.DataFrame | pd.DataFrame:
             # not popping cutoff_times
             return pl.DataFrame({"id": id_, "answer": 12315})
 
-    if "Norwe" in question_text:
-        question_text = """
-Let $\sigma(n)$ be the sum of all the divisors of the positive integer $n$, for example:
-
-$\sigma(10) = 1+2+5+10 = 18$.
-
-Define $T(N)$ to be the sum of all numbers $n \le N$ such that when the fraction $\frac{\sigma(n)}{n}$ is written in its lowest form $\frac ab$, the denominator is a power of 3 i.e. $b = 3^k, k &gt; 0$.
-
-You are given $T(100) = 270$ and $T(10^6) = 26089287$.
-
-Find $T(10^{14})$.
-
-Give your answer modulo $99991$.
-""".strip()
-    
     # Make a prediction
     prediction = solve(question_text, question_id=question_id)
     completed_question_ids.add(question_id)
