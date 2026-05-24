@@ -91,6 +91,13 @@
             color: #00d9ff;
             font-weight: 600;
         }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+        th.sortable:hover {
+            color: #fbbf24;
+        }
         th.team-header {
             text-align: left;
             width: var(--team-width);
@@ -124,6 +131,18 @@
             font-size: 11px;
             font-variant-numeric: tabular-nums;
         }
+        .pos-secondary {
+            color: #555;
+            font-size: 10px;
+        }
+        body.user-sorted {
+            --pos-width: 78px;
+        }
+        @media (max-width: 600px) {
+            body.user-sorted {
+                --pos-width: 64px;
+            }
+        }
         th.pos-header {
             padding-left: 4px;
             padding-right: 4px;
@@ -141,12 +160,23 @@
             left: var(--pos-width);
             background: #16213e;
         }
+        th.final-header {
+            position: sticky;
+            left: calc(var(--pos-width) + var(--team-width));
+            background: #0d1b2a;
+            transform: translateZ(1px);
+        }
+        td.final-cell {
+            position: sticky;
+            left: calc(var(--pos-width) + var(--team-width));
+            background: #16213e;
+        }
         th.score-header {
             width: var(--score-width);
             min-width: var(--score-width);
             max-width: var(--score-width);
             position: sticky;
-            left: calc(var(--pos-width) + var(--team-width));
+            left: calc(var(--pos-width) + var(--team-width) + var(--final-width));
             background: #0d1b2a;
             transform: translateZ(1px);
         }
@@ -155,7 +185,7 @@
             min-width: var(--score-width);
             max-width: var(--score-width);
             position: sticky;
-            left: calc(var(--pos-width) + var(--team-width));
+            left: calc(var(--pos-width) + var(--team-width) + var(--final-width));
             background: #16213e;
         }
         tbody tr {
@@ -212,6 +242,7 @@
                 --pos-width: 44px;
                 --team-width: 90px;
                 --score-width: 52px;
+                --final-width: 52px;
                 --date-col-width: 52px;
             }
             body {
@@ -260,17 +291,21 @@
                 overflow: hidden;
                 text-overflow: ellipsis;
             }
+            th.final-header,
+            td.final-cell {
+                left: calc(var(--pos-width) + var(--team-width));
+            }
             th.score-header {
                 width: var(--score-width);
                 min-width: var(--score-width);
                 max-width: var(--score-width);
-                left: calc(var(--pos-width) + var(--team-width));
+                left: calc(var(--pos-width) + var(--team-width) + var(--final-width));
             }
             td.total-score-cell {
                 width: var(--score-width);
                 min-width: var(--score-width);
                 max-width: var(--score-width);
-                left: calc(var(--pos-width) + var(--team-width));
+                left: calc(var(--pos-width) + var(--team-width) + var(--final-width));
             }
             .time-value {
                 font-size: 9px;
@@ -328,12 +363,12 @@
             });
         }
 
-        function buildSkeleton(sortedDates) {
+        function buildSkeleton(sortedDates, sortMode) {
             let html = '<table><thead><tr>';
             html += '<th class="pos-header">#</th>';
             html += '<th class="team-header">Team</th>';
-            html += '<th class="final-header">Private</th>';
-            html += '<th class="score-header">Public</th>';
+            html += `<th class="final-header sortable${sortMode === 'private' ? ' sort-active' : ''}" data-sort="private">Private</th>`;
+            html += `<th class="score-header sortable${sortMode === 'public' ? ' sort-active' : ''}" data-sort="public">Public</th>`;
             html += '<th>Subs</th>';
             for (const date of sortedDates) {
                 html += `<th class="date-header">${date}</th>`;
@@ -342,7 +377,26 @@
             return html;
         }
 
-        function buildRowsHTML(positionsSlice, history, sortedDates, startIndex) {
+        function sortPositions(positions, mode) {
+            if (mode === 'public') {
+                positions.sort((a, b) => {
+                    const pa = parseInt(a[2]), pb = parseInt(b[2]);
+                    const va = Number.isFinite(pa) && pa > 0 ? pa : Infinity;
+                    const vb = Number.isFinite(pb) && pb > 0 ? pb : Infinity;
+                    return va - vb;
+                });
+            } else {
+                positions.sort((a, b) => {
+                    const ra = a[5], rb = b[5];
+                    if (ra && rb) return ra - rb;
+                    if (ra) return -1;
+                    if (rb) return 1;
+                    return (parseInt(a[2]) || 0) - (parseInt(b[2]) || 0);
+                });
+            }
+        }
+
+        function buildRowsHTML(positionsSlice, history, sortedDates, startIndex, sortMode, userSorted) {
             let html = '';
             for (let i = 0; i < positionsSlice.length; i++) {
                 const pos = positionsSlice[i];
@@ -350,7 +404,17 @@
                 const teamHist = history[teamId] || {};
 
                 html += '<tr>';
-                html += `<td class="pos-cell">${startIndex + i + 1}</td>`;
+                let primary, secondary;
+                if (sortMode === 'public') {
+                    primary = position;
+                    secondary = finalRank;
+                } else {
+                    primary = finalRank || (startIndex + i + 1);
+                    secondary = position;
+                }
+                const showSecondary = userSorted && secondary;
+                const posCellText = `${primary}${showSecondary ? ` <span class="pos-secondary">(${secondary})</span>` : ''}`;
+                html += `<td class="pos-cell">${posCellText}</td>`;
                 html += `<td class="team-cell">${teamName}</td>`;
                 if (finalScore !== undefined) {
                     html += `<td class="final-cell has-final"><span class="final-rank">${finalScore}</span></td>`;
@@ -431,14 +495,6 @@
                     history[rec.team_id] = rec.history || {};
                 }
 
-                positions.sort((a, b) => {
-                    const ra = a[5], rb = b[5];
-                    if (ra && rb) return ra - rb;
-                    if (ra) return -1;
-                    if (rb) return 1;
-                    return (parseInt(a[2]) || 0) - (parseInt(b[2]) || 0);
-                });
-
                 if (positions.length === 0) {
                     statusEl.className = 'status';
                     statusEl.textContent = 'No data available';
@@ -454,32 +510,52 @@
                     return;
                 }
 
-                gridEl.innerHTML = buildSkeleton(sortedDates);
-                const tbody = document.getElementById('rows');
-                const CHUNK = 500;
-                let rendered = 0;
+                let sortMode = 'private';
+                let userSorted = false;
+                let activeObserver = null;
 
-                const appendChunk = () => {
-                    const slice = positions.slice(rendered, rendered + CHUNK);
-                    tbody.insertAdjacentHTML('beforeend', buildRowsHTML(slice, history, sortedDates, rendered));
-                    rendered += slice.length;
+                const render = () => {
+                    if (activeObserver) { activeObserver.disconnect(); activeObserver = null; }
+                    sortPositions(positions, sortMode);
+                    gridEl.innerHTML = buildSkeleton(sortedDates, sortMode);
+                    const tbody = document.getElementById('rows');
+                    const CHUNK = 500;
+                    let rendered = 0;
+                    const appendChunk = () => {
+                        const slice = positions.slice(rendered, rendered + CHUNK);
+                        tbody.insertAdjacentHTML('beforeend', buildRowsHTML(slice, history, sortedDates, rendered, sortMode, userSorted));
+                        rendered += slice.length;
+                    };
+                    appendChunk();
+                    if (rendered < positions.length) {
+                        gridEl.insertAdjacentHTML('beforeend', '<div id="load-sentinel" style="height:1px"></div>');
+                        const sentinel = document.getElementById('load-sentinel');
+                        activeObserver = new IntersectionObserver((entries) => {
+                            if (!entries.some(e => e.isIntersecting)) return;
+                            appendChunk();
+                            if (rendered >= positions.length) {
+                                activeObserver.disconnect();
+                                activeObserver = null;
+                                sentinel.remove();
+                            }
+                        }, { rootMargin: '800px' });
+                        activeObserver.observe(sentinel);
+                    }
+                    gridEl.querySelectorAll('th.sortable').forEach(th => {
+                        th.addEventListener('click', () => {
+                            const m = th.dataset.sort;
+                            const wasUserSorted = userSorted;
+                            userSorted = true;
+                            document.body.classList.add('user-sorted');
+                            if (m === sortMode && wasUserSorted) return;
+                            sortMode = m;
+                            window.scrollTo(0, 0);
+                            render();
+                        });
+                    });
                 };
 
-                appendChunk();
-
-                if (rendered < positions.length) {
-                    gridEl.insertAdjacentHTML('beforeend', '<div id="load-sentinel" style="height:1px"></div>');
-                    const sentinel = document.getElementById('load-sentinel');
-                    const io = new IntersectionObserver((entries) => {
-                        if (!entries.some(e => e.isIntersecting)) return;
-                        appendChunk();
-                        if (rendered >= positions.length) {
-                            io.disconnect();
-                            sentinel.remove();
-                        }
-                    }, { rootMargin: '800px' });
-                    io.observe(sentinel);
-                }
+                render();
 
                 statusEl.className = 'status success';
                 statusEl.textContent = 'Competition ended — static snapshot. Times may vary by up to 30 minutes.';
