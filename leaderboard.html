@@ -67,9 +67,10 @@
             padding: 0 10px;
         }
 :root {
-            --pos-width: 40px;
+            --pos-width: 44px;
             --team-width: 180px;
             --score-width: 60px;
+            --final-width: 64px;
             --date-col-width: 60px;
         }
         table {
@@ -118,6 +119,14 @@
             position: sticky;
             left: 0;
             background: #16213e;
+            padding-left: 4px;
+            padding-right: 4px;
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+        }
+        th.pos-header {
+            padding-left: 4px;
+            padding-right: 4px;
         }
         td.team-cell {
             text-align: left;
@@ -162,6 +171,21 @@
         td.score-cell.has-data {
             background: #0d2818;
         }
+        th.final-header {
+            width: var(--final-width);
+            min-width: var(--final-width);
+            max-width: var(--final-width);
+        }
+        td.final-cell {
+            width: var(--final-width);
+            min-width: var(--final-width);
+            max-width: var(--final-width);
+        }
+        .final-rank {
+            font-weight: bold;
+            color: #10b981;
+            font-size: 13px;
+        }
         .score-value {
             font-weight: bold;
             color: #10b981;
@@ -185,7 +209,7 @@
         /* Mobile styles */
         @media (max-width: 600px) {
             :root {
-                --pos-width: 28px;
+                --pos-width: 44px;
                 --team-width: 90px;
                 --score-width: 52px;
                 --date-col-width: 52px;
@@ -308,7 +332,8 @@
             let html = '<table><thead><tr>';
             html += '<th class="pos-header">#</th>';
             html += '<th class="team-header">Team</th>';
-            html += '<th class="score-header">Score</th>';
+            html += '<th class="final-header">Private</th>';
+            html += '<th class="score-header">Public</th>';
             html += '<th>Subs</th>';
             for (const date of sortedDates) {
                 html += `<th class="date-header">${date}</th>`;
@@ -317,15 +342,21 @@
             return html;
         }
 
-        function buildRowsHTML(positionsSlice, history, sortedDates) {
+        function buildRowsHTML(positionsSlice, history, sortedDates, startIndex) {
             let html = '';
-            for (const pos of positionsSlice) {
-                const [teamId, teamName, position, subCount, score] = pos;
+            for (let i = 0; i < positionsSlice.length; i++) {
+                const pos = positionsSlice[i];
+                const [teamId, teamName, position, subCount, score, finalRank, finalScore] = pos;
                 const teamHist = history[teamId] || {};
 
                 html += '<tr>';
-                html += `<td class="pos-cell">${position}</td>`;
+                html += `<td class="pos-cell">${startIndex + i + 1}</td>`;
                 html += `<td class="team-cell">${teamName}</td>`;
+                if (finalScore !== undefined) {
+                    html += `<td class="final-cell has-final"><span class="final-rank">${finalScore}</span></td>`;
+                } else {
+                    html += '<td class="final-cell">-</td>';
+                }
                 html += `<td class="total-score-cell"><span class="score-value">${score}</span></td>`;
                 html += `<td class="score-cell">${subCount}</td>`;
 
@@ -396,9 +427,17 @@
                 for (const line of text.split('\n')) {
                     if (!line) continue;
                     const rec = JSON.parse(line);
-                    positions.push([rec.team_id, rec.team_name, rec.position, rec.sub_count, rec.score]);
+                    positions.push([rec.team_id, rec.team_name, rec.position, rec.sub_count, rec.score, rec.final_rank, rec.final_score]);
                     history[rec.team_id] = rec.history || {};
                 }
+
+                positions.sort((a, b) => {
+                    const ra = a[5], rb = b[5];
+                    if (ra && rb) return ra - rb;
+                    if (ra) return -1;
+                    if (rb) return 1;
+                    return (parseInt(a[2]) || 0) - (parseInt(b[2]) || 0);
+                });
 
                 if (positions.length === 0) {
                     statusEl.className = 'status';
@@ -422,7 +461,7 @@
 
                 const appendChunk = () => {
                     const slice = positions.slice(rendered, rendered + CHUNK);
-                    tbody.insertAdjacentHTML('beforeend', buildRowsHTML(slice, history, sortedDates));
+                    tbody.insertAdjacentHTML('beforeend', buildRowsHTML(slice, history, sortedDates, rendered));
                     rendered += slice.length;
                 };
 
